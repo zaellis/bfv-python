@@ -1,6 +1,6 @@
 # Poly
 
-from random import randint
+from random import randint,gauss
 from ntt import *
 
 class Poly:
@@ -11,9 +11,15 @@ class Poly:
         self.F = [0]*n
         self.inNTT = False
     #
-    def randomize(self, B, domain=False):
-        self.F = [randint(0, B-1) for i in range(self.n)]
-        self.inNTT = domain
+    def randomize(self, B, domain=False, type=0, mu=0, sigma=0):
+        # type:0 --> uniform
+        # type:1 --> gauss
+        if type == 0:
+            self.F = [randint(-(B//2), B//2)%self.q for i in range(self.n)]
+            self.inNTT = domain
+        else:
+            self.F = [int(gauss(mu,sigma))%self.q for i in range(self.n)]
+            self.inNTT = domain
     #
     def __str__(self):
         pstr = str(self.F[0])

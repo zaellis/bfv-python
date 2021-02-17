@@ -1,107 +1,50 @@
-from generate_prime import *
 from BFV import *
 from helper import *
 
 from random import randint
+from math import log,ceil
 
-# Parameter generation (or enter manually)
-
-# Determine n and bit-size of q, then find a
-# q satisfying the condition: q = 1 (mod 2n)
+# This implementation follows the description at https://eprint.iacr.org/2012/144.pdf
+# Brakerski/Fan-Vercauteren (BFV) somewhat homomorphic encryption scheme
 #
-# Based on n and q, generate NTT parameters
+# Polynomial arithmetic on ciphertext domain is performed in Z[x]_q/x^n+1
+# Polynomial arithmetic on plaintext domain is performed in Z[x]_t/x^n+1
+# * n: ring size
+# * q: ciphertext coefficient modulus
+# * t: plaintext coefficient modulus (if t is equal to 2, no negative values is accepted)
+# * psi,psiv,w,wv: polynomial arithmetic parameters
+#
+# Note that n,q,t parameters together determine the multiplicative depth.
 
-# Parameter (generated or pre-defined)
-PC = 1 # 0: generate -- 1: pre-defined
+# Parameter generation (pre-defined or generate parameters)
+PD = 1 # 0: generate -- 1: pre-defined
 
-n   = 0
-q   = 0
-psi = 0
-psiv= 0
-w   = 0
-wv  = 0
+if PD == 1:
+    # Select one of the parameter sets below
+    t = 16;   n, q, psi = 1024 , 132120577         , 73993                # log(q) = 27
+    # t = 256;  n, q, psi = 2048 , 137438691329      , 22157790             # log(q) = 37
+    # t = 1024; n, q, psi = 4096 , 288230376135196673, 60193018759093       # log(q) = 58
 
-g   = 0
-# g (gamma) parameter is a constant 61-bit integer in SEAL
-# For a K-bit q, gamma could be a K-bit integer larger than q and co-prime to q, t
-
-# Determine t
-t = 4
-
-print("--- Starting BFV Demo")
-
-if PC:
-    n = 2048
-
-    q_bit = 37
-
-    # Parameters for q
-    q   = 137438691329
-    psi = 22157790
+    # other necessary parameters
     psiv= modinv(psi,q)
     w   = pow(psi,2,q)
     wv  = modinv(w,q)
-
-    g   = 0x1fffffffffc80001 # original integer from SEAL
-
-    print("* q is calculated.")
-    print("* n   : {}".format(n))
-    print("* q   : {}".format(q))
-    print("* Parameters are calculated.")
-    print("* w   : {}".format(w))
-    print("* wv  : {}".format(wv))
-    print("* psi : {}".format(psi))
-    print("* psiv: {}".format(psiv))
-    print("* g   : {}".format(g))
-
 else:
-    n = 4096
+    # Enter proper parameters below
+    t, n, logq = 16, 1024, 27
 
-    q_bit = 25
+    # other necessary parameters (based on n and log(q) determine other parameter)
+    q,psi,psiv,w,wv = ParamGen(n,logq) 
 
-    # calculate q and qnp
-    wfound = False
-    while(not(wfound)):
-        q = generate_large_prime(q_bit)
-        # check q = 1 (mod 2n)
-        while (not ((q % (2*n)) == 1)):
-            q = generate_large_prime(q_bit)
+# Determine mu, sigma (for discrete gaussian distribution)
+mu    = 0
+sigma = 0.5 * 3.2
 
-        # generate NTT parameters
-        for i in range(2,q-1):
-            wfound = isrootofunity(i,2*n,q)
-            if wfound:
-                psi = i
-                psiv= modinv(psi,q)
-                w   = pow(psi,2,q)
-                wv  = modinv(w,q)
-                break
-
-    # calculate g
-    while(1):
-        g = randint(q,2**q_bit - 1)
-        if((g>q) and (gcd(g,q) == 1) and (gcd(g,t) == 1)):
-            break
-
-    print("* q is calculated.")
-    print("* n   : {}".format(n))
-    print("* q   : {}".format(q))
-    print("* Parameters are calculated.")
-    print("* w   : {}".format(w))
-    print("* wv  : {}".format(wv))
-    print("* psi : {}".format(psi))
-    print("* psiv: {}".format(psiv))
-    print("* g   : {}".format(g))
-
-# Determine B (bound of distribution X)
-sigma = 3.1
-B = int(10*sigma)
-
-# Determine T, p (relinearization)
+# Determine T, p (for relinearization and galois keys) based on noise analysis 
 T = 256
-p = 16
+p = q**3 + 1
 
-# Generate tables
+# Generate polynomial arithmetic tables
 w_table    = [1]*n
 wv_table   = [1]*n
 psi_table  = [1]*n
@@ -114,8 +57,10 @@ for i in range(1,n):
 
 qnp = [w_table,wv_table,psi_table,psiv_table]
 
+print("--- Starting BFV Demo")
+
 # Generate BFV evaluator
-Evaluator = BFV(n, q, t, B, qnp)
+Evaluator = BFV(n, q, t, mu, sigma, qnp)
 
 # Generate Keys
 Evaluator.SecretKeyGen()
@@ -127,18 +72,22 @@ Evaluator.EvalKeyGenV2(p)
 print(Evaluator)
 
 # Generate random message
-n1, n2 = 874, 4714
+# n1, n2 = 15, -5
+n1, n2 = randint(-(2**15),2**15-1), randint(-(2**15),2**15-1)
 
 print("--- Random integers n1 and n2 are generated.")
 print("* n1: {}".format(n1))
 print("* n2: {}".format(n2))
+print("* n1+n2: {}".format(n1+n2))
+print("* n1-n2: {}".format(n1-n2))
+print("* n1*n2: {}".format(n1*n2))
 print("")
 
 # Encode random messages into plaintext polynomials
-m1 = Evaluator.Encode(n1)
-m2 = Evaluator.Encode(n2)
-
 print("--- n1 and n2 are encoded as polynomials m1(x) and m2(x).")
+m1 = Evaluator.IntEncode(n1)
+m2 = Evaluator.IntEncode(n2)
+
 print("* m1(x): {}".format(m1))
 print("* m2(x): {}".format(m2))
 print("")
@@ -158,10 +107,16 @@ print("")
 ct = Evaluator.HomomorphicAddition(ct1,ct2)
 mt = Evaluator.Decryption(ct)
 
-print("--- Performing Enc(m1+m2) = Enc(m1) + Enc(m2)")
+nr = Evaluator.IntDecode(mt) 
+ne = (n1+n2) 
 
-nr = Evaluator.Decode(mt) %t
-ne = (n1+n2) % t
+print("--- Performing ct_add = Enc(m1) + Enc(m2)")
+print("* ct_add[0] :{}".format(ct[0]))
+print("* ct_add[1] :{}".format(ct[1]))
+print("--- Performing ct_dec = Dec(ct_add)")
+print("* ct_dec    :{}".format(mt))
+print("--- Performing ct_dcd = Decode(ct_dec)")
+print("* ct_dcd    :{}".format(nr))
 
 if nr == ne:
     print("* Homomorphic addition works.")
@@ -173,10 +128,16 @@ print("")
 ct = Evaluator.HomomorphicSubtraction(ct1,ct2)
 mt = Evaluator.Decryption(ct)
 
-print("--- Performing Enc(m1-m2) = Enc(m1) - Enc(m2)")
+nr = Evaluator.IntDecode(mt) 
+ne = (n1-n2) 
 
-nr = Evaluator.Decode(mt) % t
-ne = (n1-n2) % t
+print("--- Performing ct_sub = Enc(m1) - Enc(m2)")
+print("* ct_sub[0] :{}".format(ct[0]))
+print("* ct_sub[1] :{}".format(ct[1]))
+print("--- Performing ct_dec = Dec(ct_sub)")
+print("* ct_dec    :{}".format(mt))
+print("--- Performing ct_dcd = Decode(ct_dec)")
+print("* ct_dcd    :{}".format(nr))
 
 if nr == ne:
     print("* Homomorphic subtraction works.")
@@ -188,10 +149,16 @@ print("")
 ct = Evaluator.HomomorphicMultiplication(ct1,ct2)
 mt = Evaluator.DecryptionV2(ct)
 
-print("--- Performing Enc(m1*m2) = Enc(m1) * Enc(m2) (no relinearization)")
+nr = Evaluator.IntDecode(mt) 
+ne = (n1*n2)
 
-nr = Evaluator.Decode(mt) % t
-ne = (n1*n2) % t
+print("--- Performing ct_mul = Enc(m1) * Enc(m2) (no relinearization)")
+print("* ct_mul[0] :{}".format(ct[0]))
+print("* ct_mul[1] :{}".format(ct[1]))
+print("--- Performing ct_dec = Dec(ct_sub)")
+print("* ct_dec    :{}".format(mt))
+print("--- Performing ct_dcd = Decode(ct_dec)")
+print("* ct_dcd    :{}".format(nr))
 
 if nr == ne:
     print("* Homomorphic multiplication works.")
@@ -199,19 +166,48 @@ else:
     print("* Homomorphic multiplication does not work.")
 print("")
 
-# Multiply two message (relinearization)
+# Multiply two message (relinearization v1)
 ct = Evaluator.HomomorphicMultiplication(ct1,ct2)
 ct = Evaluator.RelinearizationV1(ct)
 mt = Evaluator.Decryption(ct)
 
-print("--- Performing Enc(m1*m2) = Enc(m1) * Enc(m2) (with relinearization)")
+nr = Evaluator.IntDecode(mt)
+ne = (n1*n2)
 
-nr = Evaluator.Decode(mt) % t
-ne = (n1*n2) % t
+print("--- Performing ct_mul = Enc(m1) * Enc(m2) (with relinearization v1)")
+print("* ct_mul[0] :{}".format(ct[0]))
+print("* ct_mul[1] :{}".format(ct[1]))
+print("--- Performing ct_dec = Dec(ct_sub)")
+print("* ct_dec    :{}".format(mt))
+print("--- Performing ct_dcd = Decode(ct_dec)")
+print("* ct_dcd    :{}".format(nr))
 
 if nr == ne:
     print("* Homomorphic multiplication works.")
 else:
     print("* Homomorphic multiplication does not work.")
+print("")
 
+"""
+# Multiply two message (relinearization v2)
+ct = Evaluator.HomomorphicMultiplication(ct1,ct2)
+ct = Evaluator.RelinearizationV2(ct)
+mt = Evaluator.Decryption(ct)
+
+nr = Evaluator.IntDecode(mt)
+ne = (n1*n2)
+
+print("--- Performing ct_mul = Enc(m1) * Enc(m2) (with relinearization v2)")
+print("* ct_mul[0] :{}".format(ct[0]))
+print("* ct_mul[1] :{}".format(ct[1]))
+print("--- Performing ct_dec = Dec(ct_sub)")
+print("* ct_dec    :{}".format(mt))
+print("--- Performing ct_dcd = Decode(ct_dec)")
+print("* ct_dcd    :{}".format(nr))
+
+if nr == ne:
+    print("* Homomorphic multiplication works.")
+else:
+    print("* Homomorphic multiplication does not work.")
+"""
 #

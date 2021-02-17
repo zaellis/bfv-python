@@ -1,4 +1,7 @@
 
+from generate_prime import *
+from random import randint
+
 # Modular inverse of an integer
 def egcd(a, b):
     if a == 0:
@@ -76,3 +79,26 @@ def isrootofunity(w,m,q):
             else:
                 v = (v*w) % q
         return True
+
+# Generate necessary BFV parameters given n and log(q)
+def ParamGen(n,logq):
+    q,psi,psiv,w,wv = 0,0,0,0,0
+    # calculate q and qnp
+    wfound = False
+    while(not(wfound)):
+        q = generate_large_prime(logq)
+        # check q = 1 (mod 2n)
+        while (not ((q % (2*n)) == 1)):
+            q = generate_large_prime(logq)
+
+        # generate NTT parameters
+        for i in range(2,q-1):
+            wfound = isrootofunity(i,2*n,q)
+            if wfound:
+                psi = i
+                psiv= modinv(psi,q)
+                w   = pow(psi,2,q)
+                wv  = modinv(w,q)
+                break
+    
+    return q,psi,psiv,w,wv

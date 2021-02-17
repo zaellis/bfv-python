@@ -11,36 +11,35 @@ class BFV:
     # -- PublicKeyGen
     # -- Encryption
     # -- Decryption
-    # -- EvaluationKeyGen
+    # -- EvaluationKeyGenV1
+    # -- EvaluationKeyGenV2 (need to be fixed)
     # -- HomAdd
     # -- HomMult
     # -- RelinV1
-    # -- RelinV2
+    # -- RelinV2 (need to be fixed)
 
     # Parameters
     # (From outside)
     # -- n (ring size)
     # -- q (ciphertext modulus)
     # -- t (plaintext modulus)
-    # -- B (distribution X bound)
+    # -- mu (distribution mean)
+    # -- sigma (distribution std. dev.)
     # -- qnp (NTT parameters: [w,w_inv,psi,psi_inv])
     # (Generated with parameters)
     # -- sk
     # -- pk
-    # -- rlk
+    # -- rlk1, rlk2
 
-    # Extra parameters
-    # -- L (max mult depth)
-    # -- S (security level)
-
-    def __init__(self, n, q, t, B, qnp):
+    def __init__(self, n, q, t, mu, sigma, qnp):
         self.n = n
         self.q = q
         self.t = t
         self.T = 0
         self.l = 0
         self.p = 0
-        self.B = B
+        self.mu = mu
+        self.sigma = sigma
         self.qnp= qnp # array NTT parameters: [w,w_inv,psi,psi_inv]
         #
         self.sk = []
@@ -50,13 +49,14 @@ class BFV:
     #
     def __str__(self):
         str = "\n--- Parameters:\n"
-        str = str + "n  : {}\n".format(self.n)
-        str = str + "q  : {}\n".format(self.q)
-        str = str + "t  : {}\n".format(self.t)
-        str = str + "T  : {}\n".format(self.T)
-        str = str + "l  : {}\n".format(self.l)
-        str = str + "p  : {}\n".format(self.p)
-        str = str + "B  : {}\n".format(self.B)
+        str = str + "n    : {}\n".format(self.n)
+        str = str + "q    : {}\n".format(self.q)
+        str = str + "t    : {}\n".format(self.t)
+        str = str + "T    : {}\n".format(self.T)
+        str = str + "l    : {}\n".format(self.l)
+        str = str + "p    : {}\n".format(self.p)
+        str = str + "mu   : {}\n".format(self.mu)
+        str = str + "sigma: {}\n".format(self.sigma)
         return str
     #
     def SecretKeyGen(self):
@@ -76,7 +76,7 @@ class BFV:
         """
         a, e = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
         a.randomize(self.q)
-        e.randomize(self.B)
+        e.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
         pk0 = -(a*self.sk + e)
         pk1 = a
         self.pk = [pk0,pk1]
@@ -92,7 +92,7 @@ class BFV:
         for i in range(self.l+1):
             ai   , ei    = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
             ai.randomize(self.q)
-            ei.randomize(self.B)
+            ei.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
 
             Ts2   = Poly(self.n,self.q,self.qnp)
             Ts2.F = [((self.T**i)*j) % self.q for j in sk2.F]
@@ -105,8 +105,33 @@ class BFV:
         self.rlk1 = rlk1
     #
     def EvalKeyGenV2(self, p):
+        """
+        a <- R_p*q
+        e <- X'
+        rlk[0] = [-(a*sk+e)+p*s^2]_p*q
+        rlk[1] =  a
+        """
         self.p = p
-        pass
+
+        rlk2 = []
+
+        a, e = Poly(self.n,self.p*self.q), Poly(self.n,self.p*self.q)
+        a.randomize(self.p*self.q)
+        e.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
+
+        c0 = RefPolMulv2(a.F,self.sk.F)
+        c0 = [c0_+e_ for c0_,e_ in zip(c0,e.F)]
+        c1 = RefPolMulv2(self.sk.F,self.sk.F)
+        c1 = [self.p*c1_ for c1_ in c1]
+        c2 = [(c1_-c0_)%(self.p*self.q) for c0_,c1_ in zip(c0,c1)]
+
+        c = Poly(self.n,self.p*self.q)
+        c.F = c2
+
+        rlk2.append(c)
+        rlk2.append(a)
+
+        self.rlk2 = rlk2
     #
     def Encryption(self, m):
         """
@@ -124,8 +149,8 @@ class BFV:
         u, e1, e2 = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
 
         u.randomize(2)
-        e1.randomize(self.B)
-        e2.randomize(self.B)
+        e1.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
+        e2.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
 
         md = Poly(self.n,self.q,self.qnp)
         md.F = [(delta*x) % self.q for x in m.F]
@@ -204,20 +229,51 @@ class BFV:
         return [c0r,c1r]
     #
     def RelinearizationV2(self,ct):
-        pass
+        c0 = ct[0]
+        c1 = ct[1]
+        c2 = ct[2]
+
+        c2_0 = RefPolMulv2(c2.F,self.rlk2[0].F)
+        c2_0 = [round(c/self.p) for c in c2_0]
+        c2_0 = [(c % self.q) for c in c2_0]
+
+        c2_1 = RefPolMulv2(c2.F,self.rlk2[1].F)
+        c2_1 = [round(c/self.p) for c in c2_1]
+        c2_1 = [(c % self.q) for c in c2_1]
+
+        c0e = Poly(self.n,self.q,self.qnp); c0e.F = c2_0
+        c1e = Poly(self.n,self.q,self.qnp); c1e.F = c2_1
+
+        c0r = c0e + c0
+        c1r = c1e + c1
+
+        return [c0r,c1r]
     #
-    def Encode(self,m): # binary encode
+    def IntEncode(self,m): # integer encode
         mr = Poly(self.n,self.t)
-        mt = m
-        for i in range(self.n):
-            mr.F[i] = (mt % self.t)
-            mt      = (mt // self.t)
+        if m >0:
+            mt = m
+            for i in range(self.n):
+                mr.F[i] = (mt % 2)
+                mt      = (mt // 2)
+        elif m<0:
+            mt = -m
+            for i in range(self.n):
+                mr.F[i] = (self.t-(mt % 2)) % self.t
+                mt      = (mt // 2)
+        else:
+            mr = mr
         return mr
     #
-    def Decode(self,m): # binary decode
+    def IntDecode(self,m): # integer decode
         mr = 0
+        thr_ = 2 if(self.t == 2) else ((self.t+1)>>1)
         for i,c in enumerate(m.F):
-            mr = (mr + (c * pow(self.t,i)))# % self.t
+            if c >= thr_:
+                c_ = -(self.t-c)
+            else:
+                c_ = c
+            mr = (mr + (c_ * pow(2,i)))
         return mr
     #
     def HomomorphicAddition(self, ct0, ct1):
@@ -263,78 +319,4 @@ class BFV:
         r2.F = c2
 
         return [r0,r1,r2]
-    # SEAL Encryption function
-    def EncryptionSEAL(self, m):
-        delta = int(math.floor(self.q/self.t))
-
-        u, e1, e2 = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
-
-        u.randomize(2)
-        e1.randomize(self.B)
-        e2.randomize(self.B)
-
-        md = Poly(self.n,self.q,self.qnp)
-        md.F = [_ for _ in m.F]
-
-        for i,c in enumerate(md.F):
-            if(c >= (self.t >> 1)):
-                temp = delta * c
-
-                temp_h = temp >> 64
-                temp_l = temp & 0xFFFFFFFFFFFFFFFF
-
-                temp_l = temp_l + 1
-                temp_h = temp_h + (temp_l >> 64)
-
-                temp = (temp_h << 64) + temp_l
-
-                temp = temp % self.q
-
-                md.F[i] = temp
-            else:
-                md.F[i] = (c * delta) % self.q
-
-        c0 = self.pk[0]*u + e1
-        c0 = c0 + md
-        c1 = self.pk[1]*u + e2
-
-        return [c0,c1]
-    # SEAL Decryption function
-    def DecryptionSEAL(self, ct, g):
-        """
-        ct <- c1*s + c0
-        st,sg <- fastbconv(ct)
-        m <- (st-sg) and scaling
-        m <- m* (g^-1 mod t)
-        """
-        m = ct[1]*self.sk + ct[0]
-
-        g_div_2 = (g>>1)
-        gt      = (g*self.t)%self.q
-        q_inv_t = modinv((-self.q)%self.t, self.t)
-        q_inv_g = modinv((-self.q)%g, g)
-        g_inv_t = modinv(g, self.t)
-
-        m.F = [(x*gt) % self.q for x in m.F]
-
-        st, sg = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
-
-        st.F = [(x*q_inv_t) % self.t for x in m.F]
-        sg.F = [(x*q_inv_g) % g      for x in m.F]
-
-        for i in range(self.n):
-            m.F[i] = (st.F[i] - sg.F[i]) % self.t
-
-            if(sg.F[i] > g_div_2):
-                m.F[i] = (m.F[i] + g) % self.t
-            else:
-                m.F[i] = m.F[i]
-
-        m.F = [(x*g_inv_t) % self.t for x in m.F]
-
-        mr = Poly(self.n,self.t,self.qnp)
-        mr.F = m.F
-        mr.inNTT = m.inNTT
-
-        return mr
-#
+    
