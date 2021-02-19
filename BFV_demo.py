@@ -17,9 +17,9 @@ from math import log,ceil
 # Note that n,q,t parameters together determine the multiplicative depth.
 
 # Parameter generation (pre-defined or generate parameters)
-PD = 1 # 0: generate -- 1: pre-defined
+PD = 0 # 0: generate -- 1: pre-defined
 
-if PD == 1:
+if PD == 0:
     # Select one of the parameter sets below
     t = 16;   n, q, psi = 1024 , 132120577         , 73993                # log(q) = 27
     # t = 256;  n, q, psi = 2048 , 137438691329      , 22157790             # log(q) = 37
@@ -32,6 +32,8 @@ if PD == 1:
 else:
     # Enter proper parameters below
     t, n, logq = 16, 1024, 27
+    # t, n, logq = 256, 2048, 37
+    # t, n, logq = 1024, 4096, 58
 
     # other necessary parameters (based on n and log(q) determine other parameter)
     q,psi,psiv,w,wv = ParamGen(n,logq) 

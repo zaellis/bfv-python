@@ -67,38 +67,55 @@ def RefPolMulv2(A, B):
 
 # Check if input is m-th (could be n or 2n) primitive root of unity of q
 def isrootofunity(w,m,q):
-    if pow(w,m,q) != 1:
+    if w == 0:
         return False
-    elif pow(w,m//2,q) != (q-1):
-        return False
-    else:
-        v = w
-        for i in range(1,m):
-            if v == 1:
-                return False
-            else:
-                v = (v*w) % q
+    elif pow(w,m//2,q) == (q-1):
         return True
+    else:
+        return False
 
+# Returns a proper NTT-friendly prime
+def GetProperPrime(n,logq):
+    factor = 2*n
+    value  = (1<<logq) - factor + 1
+    lbound = (1<<(logq-1))
+    while(value > lbound):
+        if is_prime(value) == True:
+            return value
+        else:
+            value = value - factor
+    raise Exception("Failed to find a proper prime.")
+    
+# Returns a primitive root
+def FindPrimitiveRoot(m,q):
+    g = (q-1)//m
+    
+    if (q-1) != g*m:
+        return False
+
+    attempt_ctr = 0
+    attempt_max = 100
+    
+    while(attempt_ctr < attempt_max):
+        a = randint(2,q-1)
+        b = pow(a,g,q)
+        # check 
+        if isrootofunity(b,m,q):
+            return True,b
+        else:
+            attempt_ctr = attempt_ctr+1
+        
+    return True,0
+    
 # Generate necessary BFV parameters given n and log(q)
 def ParamGen(n,logq):
-    q,psi,psiv,w,wv = 0,0,0,0,0
-    # calculate q and qnp
-    wfound = False
-    while(not(wfound)):
-        q = generate_large_prime(logq)
-        # check q = 1 (mod 2n)
-        while (not ((q % (2*n)) == 1)):
-            q = generate_large_prime(logq)
-
-        # generate NTT parameters
-        for i in range(2,q-1):
-            wfound = isrootofunity(i,2*n,q)
-            if wfound:
-                psi = i
-                psiv= modinv(psi,q)
-                w   = pow(psi,2,q)
-                wv  = modinv(w,q)
-                break
-    
+    pfound = False
+    while (not(pfound)):
+        # first, find a proper prime
+        q = GetProperPrime(n,logq)  
+        # then find primitive root
+        pfound, psi = FindPrimitiveRoot(2*n,q)
+    psiv= modinv(psi,q)
+    w   = pow(psi,2,q)
+    wv  = modinv(w,q)
     return q,psi,psiv,w,wv
