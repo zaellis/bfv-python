@@ -46,6 +46,8 @@ class BFV:
         self.pk = []
         self.rlk1 = []
         self.rlk2 = []
+        
+        self.rlk3 = []
     #
     def __str__(self):
         str = "\n--- Parameters:\n"
@@ -132,6 +134,61 @@ class BFV:
         rlk2.append(a)
 
         self.rlk2 = rlk2
+    #
+    def EvalKeyGenV3(self, p):
+        """
+        b <- R_p*q
+        e' <- X'
+        sk' <- R_2
+        rlk[0] = [-b*sk' + p*sk + e']_p*q
+        rlk[1] =  b
+        """
+        self.p = p
+        rlk3 = []
+
+        old_s = self.sk
+        self.SecretKeyGen()
+
+        b, e = Poly(self.n,self.p*self.q), Poly(self.n,self.p*self.q)
+        b.randomize(self.p*self.q)
+        e.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
+
+        r0 = RefPolMulv2(b.F, self.sk.F)
+        r0 = -1 * r0
+        r0_oldsk = [self.p*x for x in old_s.F]
+        r0 = [r0_ + r1_ for r0_, r1_ in zip(r0, r0_oldsk)]
+        r0 = [r0_ - e_ for r0_, e_ in zip(r0, e.F)]
+        r0 = [x % (self.p * self.q) for x in r0]
+
+        rlk_0 = Poly(self.n,self.p*self.q)
+        rlk_0.F = r0
+
+        rlk3.append(rlk_0)
+        rlk3.append(b)
+
+        self.rlk3 = rlk3
+    #
+    def KeySwitch(self, ct):
+        """
+        """
+        c0 = ct[0]
+        c1 = ct[1]
+
+        c0_big = RefPolMulv2(c0.F, self.rlk3[0].F)
+        c0_big = [round(c/self.p) for c in c0_big]
+        c0_small = [(c % self.q) for c in c0_big]
+        c0_small = [c0_ + c0s_ for c0_, c0s_ in zip(c0.F, c0_small)]
+
+        c1_big = RefPolMulv2(c1.F, self.rlk3[1].F)
+        c1_big = [round(c/self.p) for c in c1_big]
+        c1_small = [(c % self.q) for c in c1_big]
+
+        c0, c1 = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
+
+        c0.F = c0_small
+        c1.F = c1_small
+
+        return [c0, c1]
     #
     def Encryption(self, m):
         """
