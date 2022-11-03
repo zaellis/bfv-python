@@ -174,10 +174,10 @@ class BFV:
         c0 = ct[0]
         c1 = ct[1]
 
-        c0_big = RefPolMulv2(c0.F, self.rlk3[0].F)
+        c0_big = RefPolMulv2(c1.F, self.rlk3[0].F)
         c0_big = [round(c/self.p) for c in c0_big]
         c0_small = [(c % self.q) for c in c0_big]
-        c0_small = [c0_ + c0s_ for c0_, c0s_ in zip(c0.F, c0_small)]
+        c0_new = [c0_ + c0s_ for c0_, c0s_ in zip(c0.F, c0_small)]
 
         c1_big = RefPolMulv2(c1.F, self.rlk3[1].F)
         c1_big = [round(c/self.p) for c in c1_big]
@@ -185,7 +185,7 @@ class BFV:
 
         c0, c1 = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
 
-        c0.F = c0_small
+        c0.F = c0_new
         c1.F = c1_small
 
         return [c0, c1]
