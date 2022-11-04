@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from BFV import *
 from helper import *
 
@@ -17,7 +18,7 @@ from math import log,ceil
 # Note that n,q,t parameters together determine the multiplicative depth.
 
 # Parameter generation (pre-defined or generate parameters)
-PD = 0 # 0: generate -- 1: pre-defined
+PD = 1 # 0: generate -- 1: pre-defined
 
 if PD == 0:
     # Select one of the parameter sets below
@@ -31,7 +32,8 @@ if PD == 0:
     wv  = modinv(w,q)
 else:
     # Enter proper parameters below
-    t, n, logq = 16, 1024, 27
+    #t, n, logq = 16, 1024, 27
+    t, n, logq = 16, 4, 9
     # t, n, logq = 256, 2048, 37
     # t, n, logq = 1024, 4096, 58
 
@@ -44,7 +46,7 @@ sigma = 0.5 * 3.2
 
 # Determine T, p (for relinearization and galois keys) based on noise analysis 
 T = 256
-p = q**3 + 1
+p = q**2 + 1
 
 # Generate polynomial arithmetic tables
 w_table    = [1]*n
@@ -72,7 +74,7 @@ Evaluator.PublicKeyGen()
 print(Evaluator)
 
 # Generate random message
-n1 = randint(-(2**15),2**15-1)
+n1 = randint(-10,10)
 
 print("--- Random integers n1 and n2 are generated.")
 print("* n1: {}".format(n1))
@@ -89,9 +91,27 @@ print("")
 ct1 = Evaluator.Encryption(m1)
 
 #generate keyswitch keys and switch self.sk to new key
+print("* sk0: {}".format(Evaluator.sk))
+print("* c0 old: {}".format(ct1[0]))
+print("")
+mt = Evaluator.Decryption(ct1)
+nr = Evaluator.IntDecode(mt)
+print(nr)
+
+print("* a: {}".format(ct1[1]))
+print("* p: {}".format(p))
+print("")
+
 Evaluator.EvalKeyGenV3(p)
+print("* sk1: {}".format(Evaluator.sk))
+print("")
 ct_new = Evaluator.KeySwitch(ct1)
+print("* P-1ab {}".format(ct_new[1]))
+print("* c1s {}".format(Evaluator.sk * ct_new[1]))
+print("* c0_new: {}".format(ct_new[0]))
+
 mt = Evaluator.Decryption(ct_new)
+print(mt)
 
 nr = Evaluator.IntDecode(mt)
 print(nr)
