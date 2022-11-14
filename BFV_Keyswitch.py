@@ -33,7 +33,7 @@ if PD == 0:
 else:
     # Enter proper parameters below
     #t, n, logq = 16, 1024, 27
-    t, n, logq = 16, 4, 9
+    t, n, logq = 16, 4, 27
     # t, n, logq = 256, 2048, 37
     # t, n, logq = 1024, 4096, 58
 
@@ -68,13 +68,13 @@ Evaluator = BFV(n, q, t, mu, sigma, qnp)
 
 # Generate Keys
 Evaluator.SecretKeyGen()
-Evaluator.PublicKeyGen()
+#Evaluator.PublicKeyGen()
 
 # print system parameters
 print(Evaluator)
 
 # Generate random message
-n1 = randint(-10,10)
+n1 = randint(-3,3)
 
 print("--- Random integers n1 and n2 are generated.")
 print("* n1: {}".format(n1))
@@ -88,27 +88,18 @@ print("* m1(x): {}".format(m1))
 print("")
 
 # Encrypt message
-ct1 = Evaluator.Encryption(m1)
+ct1 = Evaluator.Encryptionv2(m1)
 
 #generate keyswitch keys and switch self.sk to new key
-print("* sk0: {}".format(Evaluator.sk))
-print("* c0 old: {}".format(ct1[0]))
-print("")
 mt = Evaluator.Decryption(ct1)
 nr = Evaluator.IntDecode(mt)
 print(nr)
 
-print("* a: {}".format(ct1[1]))
 print("* p: {}".format(p))
 print("")
 
 Evaluator.EvalKeyGenV3(p)
-print("* sk1: {}".format(Evaluator.sk))
-print("")
 ct_new = Evaluator.KeySwitch(ct1)
-print("* P-1ab {}".format(ct_new[1]))
-print("* c1s {}".format(Evaluator.sk * ct_new[1]))
-print("* c0_new: {}".format(ct_new[0]))
 
 mt = Evaluator.Decryption(ct_new)
 print(mt)

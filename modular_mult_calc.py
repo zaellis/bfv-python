@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 n = 4
-q = 457 #* 208850
+q = 134217689# * 18014388040500722
 
-p = 208850
+p = 18014388040500722
 
-#a = [91, 155, 187, 86]
-#b = [51557009, 20688816, 24580469, 90450598]
-a = [250, 246, 297, 346]
-b = [456, 0, 0, 0]
+a = [107473724, 548062, 50708536, 95944201]
+b = [2394511973064212855166608, 1323821576830572365394598, 1277806234317375373317768, 1037370199752092571066329] 
 
 temp = [0] * (len(a) + len(b))
 out = [0] * n
@@ -24,8 +22,9 @@ for i in range(len(temp)):
     else:
         out[i] += temp[i]
 outp = [(o // p) % (q/p) for o in out]
-out = [o % q for o in out] 
-print("result: {}".format(out))
-outn = [(o * -1) % q for o in out]
+out_mod = [o % q for o in out] 
+print("no mod: {}".format(out))
+print("result: {}".format(out_mod))
+outn = [(o * -1) % q for o in out_mod]
 print("result * -1: {}".format(outn))
 print("result / p: {}".format(outp))

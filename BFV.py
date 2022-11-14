@@ -79,7 +79,6 @@ class BFV:
         a, e = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
         a.randomize(self.q)
         e.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
-        print("* e: {}".format(e))
         pk0 = -(a*self.sk + e)
         pk1 = a
         self.pk = [pk0,pk1]
@@ -150,19 +149,26 @@ class BFV:
         old_s = self.sk #old secret key
         self.SecretKeyGen() #generate new secret key
 
-        b, e = Poly(self.n,self.q *self.p), Poly(self.n,self.q) #generate new random polynomials b and e'
+        b, e = Poly(self.n,self.q * self.p), Poly(self.n,self.q) #generate new random polynomials b and e'
         b.randomize(self.q*self.p)
         print("* b: {}".format(b))
+        print("* s': {}".format(self.sk))
         e.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
         print("* e': {}".format(e))
 
-        r0 = RefPolMulv2(b.F, self.sk.F)                        #multiply b * s
-        r0 = [r % (self.q*self.p) for r in r0]
-        r0 = [(-1 * r) % (self.p*self.q) for r in r0]           #multiply by -1 for -bs
-        r0_oldsk = [self.p*x for x in old_s.F]                  #multiply P * s'
-        r0 = [r0_ + r1_ for r0_, r1_ in zip(r0, r0_oldsk)]      #-bs + Ps'
-        r0 = [r0_ + e_ for r0_, e_ in zip(r0, e.F)]             #-bs + Ps' + e'
+        r0 = RefPolMulv2(b.F, self.sk.F)                        #multiply b * s'
+        #r0 = [r % (self.q*self.p) for r in r0]
+        r0 = [(-1 * r) % (self.p*self.q) for r in r0]           #multiply by -1 for -bs'
+        print("* -bs': {}".format(r0))
+        r0_oldsk = [self.p*x for x in old_s.F]                  #multiply P * s
+        print("* Ps: {}".format(r0_oldsk))
+        r0 = [r0_ + r1_ for r0_, r1_ in zip(r0, r0_oldsk)]      #-bs' + Ps
+        print("* -bs' + Ps: {}".format(r0))
+        r0 = [r0_ + e_ for r0_, e_ in zip(r0, e.F)]             #-bs' + Ps + e'
+        print("* -bs' + Ps + e' premod: {}".format(r0))
         r0 = [x % (self.p * self.q) for x in r0]                #everything mod p*q
+        print("* -bs' + Ps + e': {}".format(r0))
+        print("")
 
         rlk_0 = Poly(self.n,self.p*self.q)
         rlk_0.F = r0
@@ -180,21 +186,28 @@ class BFV:
 
 
         c0_big = RefPolMulv2(c1.F, self.rlk3[0].F)              #c1 * ksh0
-        c0_big = [(c % (self.q*self.p)) for c in c0_big]
+        print("* c1*ksh0: {}".format(c0_big))
+        #c0_big = [(c % (self.q*self.p)) for c in c0_big]
         c0_big = [round(c/self.p) for c in c0_big]              #P^-1 * c1 * ksh0 (should this be a floor instead of round?)
+        print("* P^-1*c1*ksh0: {}".format(c0_big))
         c0_new = [c0_ + c0s_ for c0_, c0s_ in zip(c0.F, c0_big)]#c0 + (P^-1 * c1 * ksh0)
+        print("* c0 + (P^-1 * c1 * ksh0) premod: {}".format(c0_new))
         c0_small = [(c % self.q) for c in c0_new]
+        print("* c0 + (P^-1 * c1 * ksh0): {}".format(c0_small))
 
         c1_big = RefPolMulv2(c1.F, self.rlk3[1].F)              #c1 * ksh1
-        c1_big = [(c % (self.q*self.p)) for c in c1_big]
+        print("* c1*ksh1: {}".format(c1_big))
+        #c1_big = [(c % (self.q*self.p)) for c in c1_big]
         c1_big = [round(c/self.p) for c in c1_big]              #P^-1 * c1 * ksh1 (should this be a floor instead of round?)
+        print("* P^-1*c1*ksh1 premod: {}".format(c1_big))
         c1_small = [(c % self.q) for c in c1_big]
+        print("* P^-1*c1*ksh1: {}".format(c1_small))
+        print("")
 
         c0, c1 = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
 
         c0.F = c0_small
         c1.F = c1_small
-        print("* c1: {}".format(c1))
 
         return [c0, c1]
     #
@@ -224,6 +237,37 @@ class BFV:
         c0 = self.pk[0]*u + e1
         c0 = c0 + md
         c1 = self.pk[1]*u + e2
+
+        return [c0,c1]
+    #
+    def Encryptionv2(self, m):
+        """
+        delta = floor(q/t)
+
+        a  <- random polynomial from R_q
+        e <- random polynomial from R_B
+
+        c0 <- -a*sk + e + m*delta
+        c1 <- a
+        """
+        delta = int(math.floor(self.q/self.t))
+
+        a, e = Poly(self.n,self.q,self.qnp), Poly(self.n,self.q,self.qnp)
+        a.randomize(self.q)
+        e.randomize(0, domain=False, type=1, mu=self.mu, sigma=self.sigma)
+
+        md = Poly(self.n,self.q,self.qnp)
+        md.F = [(delta*x) % self.q for x in m.F]
+
+        c0 = self.sk*a + e
+        c0 = md - c0
+        c1 = a
+
+        print("* dm: {}".format(md))
+        print("* a: {}".format(a))
+        print("* s: {}".format(self.sk))
+        print("* e: {}".format(e))
+        print("")
 
         return [c0,c1]
     #
