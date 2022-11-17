@@ -92,6 +92,9 @@ ct1 = Evaluator.Encryptionv2(m1)
 
 #generate keyswitch keys and switch self.sk to new key
 mt = Evaluator.Decryption(ct1)
+print("* -as + dm + e: {}".format(ct1[0]))
+print("* a: {}".format(ct1[1]))
+print("")
 nr = Evaluator.IntDecode(mt)
 print(nr)
 

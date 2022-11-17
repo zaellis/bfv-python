@@ -186,8 +186,9 @@ class BFV:
 
 
         c0_big = RefPolMulv2(c1.F, self.rlk3[0].F)              #c1 * ksh0
+        print("* c1*ksh0 premod: {}".format(c0_big))
+        c0_big = [(c % (self.q*self.p)) for c in c0_big]
         print("* c1*ksh0: {}".format(c0_big))
-        #c0_big = [(c % (self.q*self.p)) for c in c0_big]
         c0_big = [round(c/self.p) for c in c0_big]              #P^-1 * c1 * ksh0 (should this be a floor instead of round?)
         print("* P^-1*c1*ksh0: {}".format(c0_big))
         c0_new = [c0_ + c0s_ for c0_, c0s_ in zip(c0.F, c0_big)]#c0 + (P^-1 * c1 * ksh0)
@@ -196,8 +197,8 @@ class BFV:
         print("* c0 + (P^-1 * c1 * ksh0): {}".format(c0_small))
 
         c1_big = RefPolMulv2(c1.F, self.rlk3[1].F)              #c1 * ksh1
+        c1_big = [(c % (self.q*self.p)) for c in c1_big]
         print("* c1*ksh1: {}".format(c1_big))
-        #c1_big = [(c % (self.q*self.p)) for c in c1_big]
         c1_big = [round(c/self.p) for c in c1_big]              #P^-1 * c1 * ksh1 (should this be a floor instead of round?)
         print("* P^-1*c1*ksh1 premod: {}".format(c1_big))
         c1_small = [(c % self.q) for c in c1_big]
